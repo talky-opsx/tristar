@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TriFit">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <title>TriFit Masters</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+      --bg: #0a0a0a; --surface: #1a1a1a; --border: #2a2a2a;
+      --text: #f5f5f5; --text-dim: #888;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      font-family: -apple-system, 'Hiragino Sans', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh;
+      padding-top: var(--safe-top);
+      padding-bottom: calc(var(--safe-bottom) + 72px);
+      -webkit-user-select: none; user-select: none;
+    }
+
+    /* ヘッダー */
+    .header {
+      padding: 16px 20px 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .header .date { font-size: 13px; color: var(--text-dim); }
+
+    /* 判定カード */
+    .verdict-card {
+      margin: 16px 20px;
+      border-radius: 20px;
+      padding: 32px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .verdict-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      border-radius: 20px;
+      border: 2px solid currentColor;
+      opacity: 0.3;
+    }
+    .verdict-card[data-verdict="GREEN"] { background: rgba(34,197,94,0.08); color: var(--green); }
+    .verdict-card[data-verdict="YELLOW"] { background: rgba(234,179,8,0.08); color: var(--yellow); }
+    .verdict-card[data-verdict="RED"] { background: rgba(239,68,68,0.08); color: var(--red); }
+
+    .verdict-label { font-size: 14px; font-weight: 600; letter-spacing: 2px; margin-bottom: 8px; }
+    .verdict-icon { font-size: 56px; line-height: 1; margin-bottom: 8px; }
+    .verdict-text { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+    .verdict-sub { font-size: 13px; opacity: 0.7; }
+
+    /* 週間TSSバー */
+    .tss-section { margin: 20px 20px 12px; }
+    .tss-section h2 { font-size: 14px; font-weight: 600; color: var(--text-dim); margin-bottom: 10px; }
+    .tss-bar-wrap {
+      background: var(--surface); border-radius: 10px;
+      height: 28px; position: relative; overflow: hidden;
+    }
+    .tss-bar {
+      height: 100%; border-radius: 10px;
+      transition: width 0.6s ease;
+    }
+    .tss-bar[data-level="green"]  { background: var(--green); }
+    .tss-bar[data-level="yellow"] { background: var(--yellow); }
+    .tss-bar[data-level="red"]    { background: var(--red); }
+    .tss-numbers {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 6px; font-size: 13px; color: var(--text-dim);
+    }
+    .tss-numbers .current { color: var(--text); font-weight: 700; font-size: 16px; }
+
+    /* 3種目カード */
+    .sport-cards {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      margin: 16px 20px;
+    }
+    .sport-card {
+      background: var(--surface); border-radius: 14px;
+      padding: 14px 10px; text-align: center;
+      border: 1px solid var(--border);
+    }
+    .sport-card .emoji { font-size: 24px; margin-bottom: 4px; }
+    .sport-card .label { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+    .sport-card .value { font-size: 18px; font-weight: 700; }
+
+    /* 膝ストレス + 回復時間 */
+    .metrics-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin: 0 20px 16px;
+    }
+    .metric-card {
+      background: var(--surface); border-radius: 14px;
+      padding: 14px; border: 1px solid var(--border);
+    }
+    .metric-card .label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+    .metric-card .value { font-size: 22px; font-weight: 700; }
+    .metric-card .unit { font-size: 12px; color: var(--text-dim); }
+
+    /* クイック入力ボタン */
+    .quick-add {
+      margin: 20px 20px;
+    }
+    .quick-add button {
+      width: 100%;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px dashed var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .quick-add button:active { opacity: 0.7; }
+
+    /* タブバー */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 calc(var(--safe-bottom) + 8px);
+    }
+    .tab-bar a {
+      display: flex; flex-direction: column; align-items: center;
+      text-decoration: none; color: var(--text-dim);
+      font-size: 10px; gap: 2px; padding: 4px 12px;
+    }
+    .tab-bar a.active { color: var(--text); }
+    .tab-bar a .icon { font-size: 22px; }
+
+    /* 簡易モーダル */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      width: 100%; max-width: 500px;
+      padding: 24px 20px calc(var(--safe-bottom) + 24px);
+    }
+    .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .modal label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 4px; margin-top: 12px; }
+    .modal select, .modal input {
+      width: 100%; padding: 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); font-size: 15px;
+    }
+    .modal .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .modal .btn-row button {
+      flex: 1; padding: 14px; border-radius: 12px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .modal .btn-cancel { background: var(--border); color: var(--text); }
+    .modal .btn-save { background: var(--text); color: var(--bg); }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>TriFit Masters</h1>
+    <span class="date" id="dateLabel"></span>
+  </div>
+
+  <!-- GO/NO-GO 判定カード -->
+  <div class="verdict-card" id="verdictCard" data-verdict="GREEN">
+    <div class="verdict-label">TODAY'S VERDICT</div>
+    <div class="verdict-icon" id="verdictIcon"></div>
+    <div class="verdict-text" id="verdictText">GREEN</div>
+    <div class="verdict-sub" id="verdictSub">推奨回復時間: --h</div>
+  </div>
+
+  <!-- 週間TSSバー -->
+  <div class="tss-section">
+    <h2>週間TSS</h2>
+    <div class="tss-bar-wrap">
+      <div class="tss-bar" id="tssBar" data-level="green" style="width: 0%"></div>
+    </div>
+    <div class="tss-numbers">
+      <span class="current" id="tssCurrent">0</span>
+      <span>/ <span id="tssCap">460</span></span>
+    </div>
+  </div>
+
+  <!-- 3種目カード -->
+  <div class="sport-cards">
+    <div class="sport-card">
+      <div class="emoji">&#x1F3CA;</div>
+      <div class="label">SWIM</div>
+      <div class="value" id="swimTSS">0</div>
+    </div>
+    <div class="sport-card">
+      <div class="emoji">&#x1F6B4;</div>
+      <div class="label">BIKE</div>
+      <div class="value" id="bikeTSS">0</div>
+    </div>
+    <div class="sport-card">
+      <div class="emoji">&#x1F3C3;</div>
+      <div class="label">RUN</div>
+      <div class="value" id="runTSS">0</div>
+    </div>
+  </div>
+
+  <!-- 膝ストレス + 回復時間 -->
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="label">膝ストレス指数</div>
+      <div><span class="value" id="kneeScore">0</span><span class="unit"> / 100</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="label">週間ランニング</div>
+      <div><span class="value" id="weekRunKm">0</span><span class="unit"> km</span></div>
+    </div>
+  </div>
+
+  <!-- クイック入力 -->
+  <div class="quick-add">
+    <button id="btnQuickAdd">+ トレーニングを記録</button>
+  </div>
+
+  <!-- タブバー -->
+  <nav class="tab-bar">
+    <a href="./index.html" class="active">
+      <span class="icon">&#x1F3AF;</span>判定
+    </a>
+    <a href="./fit-import.html">
+      <span class="icon">&#x23F1;</span>FIT取込
+    </a>
+    <a href="./pain-log.html">
+      <span class="icon">&#x1F9B5;</span>痛みログ
+    </a>
+    <a href="./routine.html">
+      <span class="icon">&#x1F4CB;</span>ルーチン
+    </a>
+  </nav>
+
+  <!-- クイック入力モーダル -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h3>トレーニング記録</h3>
+      <label>種目</label>
+      <select id="inputSport">
+        <option value="swim">スイム</option>
+        <option value="bike">バイク</option>
+        <option value="run">ラン</option>
+      </select>
+      <label>時間（分）</label>
+      <input type="number" id="inputDuration" placeholder="60" inputmode="numeric">
+      <label>平均心拍数（bpm）</label>
+      <input type="number" id="inputAvgHR" placeholder="140" inputmode="numeric">
+      <label>距離（m）※任意</label>
+      <input type="number" id="inputDistance" placeholder="10000" inputmode="numeric">
+      <div class="btn-row">
+        <button class="btn-cancel" id="btnCancel">キャンセル</button>
+        <button class="btn-save" id="btnSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Store, calcWeekSummary, AG_CONFIG } from './lib/core.js';
+
+    // 日付表示
+    const now = new Date();
+    const dow = ['日','月','火','水','木','金','土'][now.getDay()];
+    document.getElementById('dateLabel').textContent =
+      `${now.getMonth()+1}/${now.getDate()}（${dow}）`;
+
+    // 画面更新
+    function render() {
+      const s = calcWeekSummary();
+      const settings = Store.getSettings();
+      const ag = AG_CONFIG[settings.ageGroup] || AG_CONFIG['45-49'];
+
+      // 判定カード
+      const card = document.getElementById('verdictCard');
+      card.dataset.verdict = s.verdict.label;
+      document.getElementById('verdictText').textContent = s.verdict.label;
+      document.getElementById('verdictSub').textContent =
+        `推奨回復時間: ${s.verdict.recH}h`;
+
+      const icons = { GREEN: '\u2705', YELLOW: '\u26A0\uFE0F', RED: '\uD83D\uDED1' };
+      document.getElementById('verdictIcon').textContent = icons[s.verdict.label];
+
+      // TSSバー
+      const pct = Math.min(s.tssRatio, 100);
+      const bar = document.getElementById('tssBar');
+      bar.style.width = pct + '%';
+      bar.dataset.level = s.tssRatio > 95 ? 'red' : s.tssRatio > 78 ? 'yellow' : 'green';
+      document.getElementById('tssCurrent').textContent = s.totalTSS;
+      document.getElementById('tssCap').textContent = s.weeklyTSSCap;
+
+      // 種目別
+      document.getElementById('swimTSS').textContent = s.swimTSS;
+      document.getElementById('bikeTSS').textContent = s.bikeTSS;
+      document.getElementById('runTSS').textContent = s.runTSS;
+
+      // メトリクス
+      document.getElementById('kneeScore').textContent = s.kneeScore;
+      document.getElementById('weekRunKm').textContent = s.weekRunKm;
+    }
+
+    // モーダル
+    const overlay = document.getElementById('modalOverlay');
+    document.getElementById('btnQuickAdd').addEventListener('click', () => {
+      overlay.classList.add('open');
+    });
+    document.getElementById('btnCancel').addEventListener('click', () => {
+      overlay.classList.remove('open');
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+
+    document.getElementById('btnSave').addEventListener('click', () => {
+      const sport = document.getElementById('inputSport').value;
+      const durationSec = (parseInt(document.getElementById('inputDuration').value) || 0) * 60;
+      const avgHR = parseInt(document.getElementById('inputAvgHR').value) || 0;
+      const distanceM = parseInt(document.getElementById('inputDistance').value) || 0;
+
+      if (!durationSec || !avgHR) return;
+
+      Store.addLog({ sport, durationSec, avgHR, distanceM });
+      overlay.classList.remove('open');
+
+      // フォームリセット
+      document.getElementById('inputDuration').value = '';
+      document.getElementById('inputAvgHR').value = '';
+      document.getElementById('inputDistance').value = '';
+
+      render();
+    });
+
+    // Service Worker登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+
+    // 初回描画
+    render();
+  </script>
+</body>
+</html>
