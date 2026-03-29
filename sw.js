@@ -1,9 +1,13 @@
-const CACHE_NAME = 'trifit-v1';
+const CACHE_NAME = 'trifit-v3';
 const ASSETS = [
   './',
   './index.html',
+  './fit-import.html',
+  './pain-log.html',
+  './routine.html',
   './manifest.json',
-  './lib/core.js'
+  './lib/core.js',
+  './lib/fit-parser.js'
 ];
 
 self.addEventListener('install', e => {

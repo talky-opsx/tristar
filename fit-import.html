@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TriFit">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="./manifest.json">
+  <title>FIT取込 - TriFit Masters</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+      --bg: #0a0a0a; --surface: #1a1a1a; --border: #2a2a2a;
+      --text: #f5f5f5; --text-dim: #888; --accent: #3b82f6;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      font-family: -apple-system, 'Hiragino Sans', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh;
+      padding-top: var(--safe-top);
+      padding-bottom: calc(var(--safe-bottom) + 72px);
+      -webkit-user-select: none; user-select: none;
+    }
+
+    .header {
+      padding: 16px 20px 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header .badge {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--text-dim);
+    }
+
+    /* ドロップゾーン */
+    .drop-zone {
+      margin: 16px 20px;
+      border: 2px dashed var(--border);
+      border-radius: 20px;
+      padding: 40px 24px;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone.active {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.06);
+    }
+    .drop-zone .icon { font-size: 40px; margin-bottom: 8px; }
+    .drop-zone .title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .drop-zone .sub { font-size: 13px; color: var(--text-dim); }
+    .drop-zone input { display: none; }
+
+    /* 処理中 */
+    .processing {
+      display: none; margin: 16px 20px;
+      text-align: center; padding: 20px;
+    }
+    .processing.show { display: block; }
+    .spinner {
+      width: 32px; height: 32px; margin: 0 auto 12px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 結果リスト */
+    .results { margin: 0 20px; }
+    .results h2 { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
+
+    .result-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px; margin-bottom: 10px;
+    }
+    .result-card .top {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+    .result-card .sport-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 15px; font-weight: 700;
+    }
+    .result-card .tss-value {
+      font-size: 22px; font-weight: 800; color: var(--accent);
+    }
+    .result-card .tss-label { font-size: 11px; color: var(--text-dim); }
+    .result-card .details {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .result-card .detail {
+      text-align: center;
+    }
+    .result-card .detail .val { font-size: 14px; font-weight: 600; }
+    .result-card .detail .lbl { font-size: 10px; color: var(--text-dim); }
+
+    /* ランニングダイナミクス追加行 */
+    .result-card .dynamics {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+      margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+    }
+
+    /* サマリー */
+    .summary-card {
+      display: none;
+      margin: 16px 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px;
+    }
+    .summary-card.show { display: block; }
+    .summary-card h3 { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
+    .summary-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0; border-bottom: 1px solid var(--border);
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row .label { font-size: 13px; }
+    .summary-row .value { font-size: 15px; font-weight: 700; }
+
+    /* 保存ボタン */
+    .save-area {
+      display: none; margin: 16px 20px;
+    }
+    .save-area.show { display: block; }
+    .save-area button {
+      width: 100%; padding: 16px; border-radius: 14px; border: none;
+      background: var(--green); color: #fff;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+    }
+    .save-area button:active { opacity: 0.8; }
+    .save-area .saved {
+      display: none; text-align: center; padding: 16px;
+      color: var(--green); font-weight: 600; font-size: 15px;
+    }
+
+    /* エラー */
+    .error-msg {
+      display: none; margin: 12px 20px;
+      background: rgba(239,68,68,0.1); border: 1px solid var(--red);
+      border-radius: 12px; padding: 12px 16px;
+      color: var(--red); font-size: 13px;
+    }
+    .error-msg.show { display: block; }
+
+    /* タブバー */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 calc(var(--safe-bottom) + 8px);
+    }
+    .tab-bar a {
+      display: flex; flex-direction: column; align-items: center;
+      text-decoration: none; color: var(--text-dim);
+      font-size: 10px; gap: 2px; padding: 4px 12px;
+    }
+    .tab-bar a.active { color: var(--text); }
+    .tab-bar a .icon { font-size: 22px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>FIT取込</h1>
+    <span class="badge" id="agLabel">AG 45-49</span>
+  </div>
+
+  <!-- ドロップゾーン -->
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">&#x1F4C2;</div>
+    <div class="title">FITファイルを選択</div>
+    <div class="sub">Garmin Connectから出力した .fit / .zip<br>複数ファイル対応</div>
+    <input type="file" id="fileInput" accept=".fit,.zip" multiple>
+  </div>
+
+  <!-- 処理中 -->
+  <div class="processing" id="processing">
+    <div class="spinner"></div>
+    <div>解析中...</div>
+  </div>
+
+  <!-- エラー -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- 解析結果 -->
+  <div class="results" id="results"></div>
+
+  <!-- サマリー -->
+  <div class="summary-card" id="summaryCard">
+    <h3>取込サマリー</h3>
+    <div id="summaryRows"></div>
+  </div>
+
+  <!-- 保存ボタン -->
+  <div class="save-area" id="saveArea">
+    <button id="btnSave">週間ログに保存</button>
+    <div class="saved" id="savedMsg">&#x2705; 保存しました！判定画面に反映されます</div>
+  </div>
+
+  <!-- タブバー -->
+  <nav class="tab-bar">
+    <a href="./index.html">
+      <span class="icon">&#x1F3AF;</span>判定
+    </a>
+    <a href="./fit-import.html" class="active">
+      <span class="icon">&#x23F1;</span>FIT取込
+    </a>
+    <a href="./pain-log.html">
+      <span class="icon">&#x1F9B5;</span>痛みログ
+    </a>
+    <a href="./routine.html">
+      <span class="icon">&#x1F4CB;</span>ルーチン
+    </a>
+  </nav>
+
+  <script type="module">
+    import { Store, calcHrTSS, AG_CONFIG } from './lib/core.js';
+    import { analyzeFIT } from './lib/fit-parser.js';
+
+    const settings = Store.getSettings();
+    const ag = AG_CONFIG[settings.ageGroup] || AG_CONFIG['45-49'];
+    document.getElementById('agLabel').textContent = `AG ${settings.ageGroup}`;
+
+    const SPORT_EMOJI = { swim: '\u{1F3CA}', bike: '\u{1F6B4}', run: '\u{1F3C3}' };
+    const SPORT_LABEL = { swim: 'SWIM', bike: 'BIKE', run: 'RUN', generic: 'OTHER' };
+
+    let parsedActivities = [];
+
+    // ファイル選択
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('active');
+      handleFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    async function handleFiles(fileList) {
+      const files = Array.from(fileList);
+      if (files.length === 0) return;
+
+      document.getElementById('processing').classList.add('show');
+      document.getElementById('errorMsg').classList.remove('show');
+      document.getElementById('results').innerHTML = '';
+      document.getElementById('summaryCard').classList.remove('show');
+      document.getElementById('saveArea').classList.remove('show');
+      parsedActivities = [];
+
+      const fitBuffers = [];
+
+      for (const file of files) {
+        if (file.name.endsWith('.zip')) {
+          // ZIP展開（JSZipなしの簡易展開 or そのままFITとして試行）
+          try {
+            const zipBuf = await file.arrayBuffer();
+            const extracted = extractFitFromZip(zipBuf);
+            fitBuffers.push(...extracted);
+          } catch (e) {
+            showError(`ZIP展開エラー: ${file.name} - ${e.message}`);
+          }
+        } else {
+          fitBuffers.push({ name: file.name, buffer: await file.arrayBuffer() });
+        }
+      }
+
+      if (fitBuffers.length === 0) {
+        document.getElementById('processing').classList.remove('show');
+        showError('FITファイルが見つかりませんでした');
+        return;
+      }
+
+      // 各FITファイルを解析
+      for (const { name, buffer } of fitBuffers) {
+        try {
+          const activity = analyzeFIT(buffer);
+          activity.fileName = name;
+
+          // hrTSS計算
+          const lthr = activity.sport === 'swim' ? (settings.swimLthr || 153) : settings.lthr;
+          activity.tss = calcHrTSS(activity.durationSec, activity.avgHR, lthr);
+
+          parsedActivities.push(activity);
+        } catch (e) {
+          showError(`${name}: ${e.message}`);
+        }
+      }
+
+      document.getElementById('processing').classList.remove('show');
+
+      if (parsedActivities.length > 0) {
+        renderResults();
+        renderSummary();
+      }
+    }
+
+    /**
+     * 簡易ZIP展開（PKヘッダーからLocal File Headerを読む）
+     * 圧縮方式0（Store）のみ対応。Deflateの場合はエラーを表示。
+     */
+    function extractFitFromZip(arrayBuffer) {
+      const view = new DataView(arrayBuffer);
+      const bytes = new Uint8Array(arrayBuffer);
+      const results = [];
+      let offset = 0;
+
+      while (offset < bytes.length - 4) {
+        // Local file header signature = 0x04034b50
+        if (view.getUint32(offset, true) !== 0x04034b50) break;
+
+        const method = view.getUint16(offset + 8, true);
+        const compSize = view.getUint32(offset + 18, true);
+        const uncompSize = view.getUint32(offset + 22, true);
+        const nameLen = view.getUint16(offset + 26, true);
+        const extraLen = view.getUint16(offset + 28, true);
+
+        const nameBytes = bytes.slice(offset + 30, offset + 30 + nameLen);
+        const fileName = new TextDecoder().decode(nameBytes);
+
+        const dataStart = offset + 30 + nameLen + extraLen;
+
+        if (fileName.toLowerCase().endsWith('.fit') && compSize > 0) {
+          if (method === 0) {
+            // Store (非圧縮)
+            results.push({
+              name: fileName,
+              buffer: arrayBuffer.slice(dataStart, dataStart + compSize),
+            });
+          } else if (method === 8) {
+            // Deflate - DecompressionStreamを使用
+            try {
+              const compressed = bytes.slice(dataStart, dataStart + compSize);
+              const decompressed = decompressDeflateRaw(compressed);
+              results.push({ name: fileName, buffer: decompressed.buffer });
+            } catch (e) {
+              throw new Error(`${fileName}の展開に失敗: Deflate圧縮は非対応。非圧縮ZIPでエクスポートしてください`);
+            }
+          }
+        }
+
+        offset = dataStart + compSize;
+      }
+
+      return results;
+    }
+
+    /**
+     * DecompressionStream APIを使ったDeflate展開
+     */
+    function decompressDeflateRaw(compressed) {
+      // ブラウザ互換のためsync fallback
+      // DecompressionStreamはasyncなので、ここでは簡易的にエラーをスロー
+      throw new Error('Deflate');
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.add('show');
+    }
+
+    function formatDuration(sec) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      return h > 0 ? `${h}h${String(m).padStart(2,'0')}m` : `${m}m`;
+    }
+
+    function formatDistance(m) {
+      if (m >= 1000) return `${(m / 1000).toFixed(1)}km`;
+      return `${m}m`;
+    }
+
+    function renderResults() {
+      const container = document.getElementById('results');
+      container.innerHTML = '<h2>解析結果</h2>';
+
+      for (const a of parsedActivities) {
+        const emoji = SPORT_EMOJI[a.sport] || '\u{1F3CB}';
+        const label = SPORT_LABEL[a.sport] || a.sport.toUpperCase();
+
+        let dynamicsHTML = '';
+        if (a.sport === 'run' && (a.gct || a.vo || a.cadence)) {
+          dynamicsHTML = `
+            <div class="dynamics">
+              ${a.cadence ? `<div class="detail"><div class="val">${a.cadence} spm</div><div class="lbl">ケイデンス</div></div>` : ''}
+              ${a.gct ? `<div class="detail"><div class="val">${a.gct} ms</div><div class="lbl">接地時間</div></div>` : ''}
+              ${a.vo ? `<div class="detail"><div class="val">${a.vo} mm</div><div class="lbl">上下動</div></div>` : ''}
+              ${a.elevGain ? `<div class="detail"><div class="val">${a.elevGain} m</div><div class="lbl">獲得標高</div></div>` : ''}
+            </div>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.innerHTML = `
+          <div class="top">
+            <div class="sport-badge">${emoji} ${label}</div>
+            <div style="text-align:right">
+              <div class="tss-value">${a.tss}</div>
+              <div class="tss-label">hrTSS</div>
+            </div>
+          </div>
+          <div class="details">
+            <div class="detail"><div class="val">${formatDuration(a.durationSec)}</div><div class="lbl">時間</div></div>
+            <div class="detail"><div class="val">${formatDistance(a.distanceM)}</div><div class="lbl">距離</div></div>
+            <div class="detail"><div class="val">${a.avgHR} bpm</div><div class="lbl">平均HR</div></div>
+          </div>
+          ${dynamicsHTML}
+          <div style="margin-top:6px;font-size:11px;color:var(--text-dim)">${a.fileName}</div>
+        `;
+        container.appendChild(card);
+      }
+    }
+
+    function renderSummary() {
+      const summary = { totalTSS: 0, swim: 0, bike: 0, run: 0, files: parsedActivities.length };
+      for (const a of parsedActivities) {
+        summary.totalTSS += a.tss;
+        if (a.sport === 'swim') summary.swim += a.tss;
+        else if (a.sport === 'bike') summary.bike += a.tss;
+        else if (a.sport === 'run') summary.run += a.tss;
+      }
+
+      const rows = document.getElementById('summaryRows');
+      rows.innerHTML = `
+        <div class="summary-row"><span class="label">ファイル数</span><span class="value">${summary.files}</span></div>
+        <div class="summary-row"><span class="label">合計TSS</span><span class="value">${summary.totalTSS}</span></div>
+        <div class="summary-row"><span class="label">\u{1F3CA} SWIM</span><span class="value">${summary.swim}</span></div>
+        <div class="summary-row"><span class="label">\u{1F6B4} BIKE</span><span class="value">${summary.bike}</span></div>
+        <div class="summary-row"><span class="label">\u{1F3C3} RUN</span><span class="value">${summary.run}</span></div>
+        <div class="summary-row"><span class="label">週間CAP</span><span class="value">${ag.weeklyTSSCap}</span></div>
+      `;
+      document.getElementById('summaryCard').classList.add('show');
+      document.getElementById('saveArea').classList.add('show');
+    }
+
+    // 保存
+    document.getElementById('btnSave').addEventListener('click', () => {
+      for (const a of parsedActivities) {
+        Store.addLog({
+          sport: a.sport,
+          durationSec: a.durationSec,
+          avgHR: a.avgHR,
+          maxHR: a.maxHR,
+          distanceM: a.distanceM,
+          cadence: a.cadence,
+          elevGain: a.elevGain,
+          gct: a.gct,
+          vo: a.vo,
+          fileName: a.fileName,
+        });
+      }
+
+      document.getElementById('btnSave').style.display = 'none';
+      document.getElementById('savedMsg').style.display = 'block';
+    });
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
+</body>
+</html>

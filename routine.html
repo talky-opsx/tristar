@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TriFit">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="./manifest.json">
+  <title>ルーチン - TriFit Masters</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+      --bg: #0a0a0a; --surface: #1a1a1a; --border: #2a2a2a;
+      --text: #f5f5f5; --text-dim: #888; --accent: #3b82f6;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      font-family: -apple-system, 'Hiragino Sans', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh;
+      padding-top: var(--safe-top);
+      padding-bottom: calc(var(--safe-bottom) + 72px);
+      -webkit-user-select: none; user-select: none;
+    }
+    .header {
+      padding: 16px 20px 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header .date { font-size: 13px; color: var(--text-dim); }
+
+    /* タイミング切替 */
+    .timing-tabs {
+      display: flex; gap: 6px; margin: 8px 20px 16px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    .timing-tabs::-webkit-scrollbar { display: none; }
+    .timing-tab {
+      flex-shrink: 0; padding: 8px 16px; border-radius: 10px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .timing-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* 進捗サマリー */
+    .progress-bar-wrap {
+      margin: 0 20px 16px;
+      background: var(--surface); border-radius: 12px;
+      padding: 12px 16px; border: 1px solid var(--border);
+    }
+    .progress-top {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .progress-top .label { font-size: 13px; color: var(--text-dim); }
+    .progress-top .count { font-size: 15px; font-weight: 700; }
+    .progress-track {
+      height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: var(--green); border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+
+    /* ルーチンリスト */
+    .routine-list { margin: 0 20px; }
+    .routine-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 12px;
+      transition: opacity 0.3s;
+    }
+    .routine-item.done { opacity: 0.5; }
+    .routine-item .check-btn {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid var(--border); background: transparent;
+      cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: transparent; transition: all 0.2s;
+    }
+    .routine-item.done .check-btn {
+      border-color: var(--green); background: var(--green); color: #fff;
+    }
+    .routine-item .info { flex: 1; }
+    .routine-item .name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+    .routine-item .desc { font-size: 12px; color: var(--text-dim); }
+    .routine-item .meta {
+      display: flex; gap: 8px; margin-top: 4px;
+    }
+    .routine-item .tag {
+      font-size: 10px; padding: 2px 8px; border-radius: 6px;
+      background: rgba(59,130,246,0.1); color: var(--accent);
+    }
+    .routine-item .tag.care { background: rgba(34,197,94,0.1); color: var(--green); }
+    .routine-item .tag.strength { background: rgba(234,179,8,0.1); color: var(--yellow); }
+
+    .routine-item .duration {
+      font-size: 13px; color: var(--text-dim); font-weight: 600; flex-shrink: 0;
+    }
+
+    /* セクション見出し */
+    .section-title {
+      font-size: 12px; color: var(--text-dim); font-weight: 600;
+      margin: 16px 20px 8px; letter-spacing: 1px;
+    }
+
+    /* 追加ボタン */
+    .add-btn-area { margin: 20px 20px; }
+    .add-btn-area button {
+      width: 100%; padding: 14px; border-radius: 14px;
+      border: 1px dashed var(--border); background: var(--surface);
+      color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .add-btn-area button:active { opacity: 0.7; }
+
+    /* モーダル */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      width: 100%; max-width: 500px;
+      padding: 24px 20px calc(var(--safe-bottom) + 24px);
+    }
+    .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .modal label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 4px; margin-top: 12px; }
+    .modal input, .modal select, .modal textarea {
+      width: 100%; padding: 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); font-size: 15px; font-family: inherit;
+    }
+    .modal textarea { resize: none; height: 50px; }
+    .modal .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .modal .btn-row button {
+      flex: 1; padding: 14px; border-radius: 12px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .btn-cancel { background: var(--border); color: var(--text); }
+    .btn-save { background: var(--text); color: var(--bg); }
+    .btn-delete { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    /* タブバー */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 calc(var(--safe-bottom) + 8px);
+    }
+    .tab-bar a {
+      display: flex; flex-direction: column; align-items: center;
+      text-decoration: none; color: var(--text-dim);
+      font-size: 10px; gap: 2px; padding: 4px 12px;
+    }
+    .tab-bar a.active { color: var(--text); }
+    .tab-bar a .icon { font-size: 22px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>ルーチン</h1>
+    <span class="date" id="dateLabel"></span>
+  </div>
+
+  <!-- タイミング切替 -->
+  <div class="timing-tabs" id="timingTabs">
+    <button class="timing-tab active" data-timing="morning">起床時</button>
+    <button class="timing-tab" data-timing="pre">練習前</button>
+    <button class="timing-tab" data-timing="post">練習後</button>
+    <button class="timing-tab" data-timing="night">就寝前</button>
+  </div>
+
+  <!-- 進捗バー -->
+  <div class="progress-bar-wrap">
+    <div class="progress-top">
+      <span class="label">今日の進捗</span>
+      <span class="count" id="progressCount">0 / 0</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- ルーチンリスト -->
+  <div id="routineContainer"></div>
+
+  <!-- ルーチン追加ボタン -->
+  <div class="add-btn-area">
+    <button id="btnAddRoutine">+ ルーチンを追加</button>
+  </div>
+
+  <!-- 追加/編集モーダル -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h3 id="modalTitle">ルーチンを追加</h3>
+      <label>名前</label>
+      <input type="text" id="inputName" placeholder="例: フォームローラー 腸脛靭帯">
+      <label>カテゴリ</label>
+      <select id="inputCategory">
+        <option value="care">ケア手順</option>
+        <option value="strength">筋トレ</option>
+        <option value="stretch">ストレッチ</option>
+        <option value="mobility">モビリティ</option>
+      </select>
+      <label>タイミング</label>
+      <select id="inputTiming">
+        <option value="morning">起床時</option>
+        <option value="pre">練習前</option>
+        <option value="post">練習後</option>
+        <option value="night">就寝前</option>
+      </select>
+      <label>所要時間（分）</label>
+      <input type="number" id="inputDuration" placeholder="5" inputmode="numeric">
+      <label>メモ（任意）</label>
+      <textarea id="inputDesc" placeholder="例: 左右各30秒 x 3セット"></textarea>
+      <div class="btn-row" id="btnRow">
+        <button class="btn-cancel" id="btnCancel">キャンセル</button>
+        <button class="btn-save" id="btnSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- タブバー -->
+  <nav class="tab-bar">
+    <a href="./index.html">
+      <span class="icon">&#x1F3AF;</span>判定
+    </a>
+    <a href="./fit-import.html">
+      <span class="icon">&#x23F1;</span>FIT取込
+    </a>
+    <a href="./pain-log.html">
+      <span class="icon">&#x1F9B5;</span>痛みログ
+    </a>
+    <a href="./routine.html" class="active">
+      <span class="icon">&#x1F4CB;</span>ルーチン
+    </a>
+  </nav>
+
+  <script type="module">
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const dow = ['日','月','火','水','木','金','土'][now.getDay()];
+    document.getElementById('dateLabel').textContent = `${now.getMonth()+1}/${now.getDate()}（${dow}）`;
+
+    const CATEGORY_TAGS = {
+      care: { label: 'ケア', cls: 'care' },
+      strength: { label: '筋トレ', cls: 'strength' },
+      stretch: { label: 'ストレッチ', cls: 'care' },
+      mobility: { label: 'モビリティ', cls: '' },
+    };
+
+    // プリセットルーチン
+    const PRESETS = [
+      { id: 'p1', name: 'フォームローラー 腸脛靭帯', category: 'care', timing: 'post', duration: 3, desc: '左右各30秒 x 3セット' },
+      { id: 'p2', name: 'フォームローラー 大腿四頭筋', category: 'care', timing: 'post', duration: 3, desc: '左右各30秒 x 3セット' },
+      { id: 'p3', name: 'ふくらはぎストレッチ', category: 'stretch', timing: 'post', duration: 2, desc: '壁押し 左右30秒 x 2' },
+      { id: 'p4', name: 'ハムストリングストレッチ', category: 'stretch', timing: 'post', duration: 2, desc: '前屈 30秒 x 2' },
+      { id: 'p5', name: '股関節回し', category: 'mobility', timing: 'pre', duration: 2, desc: '前後左右 各10回' },
+      { id: 'p6', name: 'クラムシェル', category: 'strength', timing: 'morning', duration: 3, desc: '左右15回 x 2セット' },
+      { id: 'p7', name: 'カーフレイズ', category: 'strength', timing: 'morning', duration: 3, desc: '20回 x 3セット' },
+      { id: 'p8', name: '片脚スクワット', category: 'strength', timing: 'pre', duration: 3, desc: '左右10回 x 2セット' },
+      { id: 'p9', name: 'プランク', category: 'strength', timing: 'morning', duration: 2, desc: '60秒 x 2セット' },
+      { id: 'p10', name: 'アキレス腱エキセントリック', category: 'care', timing: 'night', duration: 3, desc: '段差で左右15回 x 2' },
+      { id: 'p11', name: '膝周りアイシング', category: 'care', timing: 'night', duration: 10, desc: '練習後の膝に氷嚢10分' },
+    ];
+
+    // ルーチンStore
+    const RoutineStore = {
+      _keyRoutines: 'trifit_routines',
+      _keyDone: 'trifit_routine_done',
+
+      getRoutines() {
+        const raw = localStorage.getItem(this._keyRoutines);
+        if (!raw) {
+          // 初回: プリセットを保存
+          localStorage.setItem(this._keyRoutines, JSON.stringify(PRESETS));
+          return [...PRESETS];
+        }
+        return JSON.parse(raw);
+      },
+      saveRoutines(list) {
+        localStorage.setItem(this._keyRoutines, JSON.stringify(list));
+      },
+      addRoutine(r) {
+        const list = this.getRoutines();
+        r.id = 'r' + Date.now();
+        list.push(r);
+        this.saveRoutines(list);
+      },
+      removeRoutine(id) {
+        const list = this.getRoutines().filter(r => r.id !== id);
+        this.saveRoutines(list);
+      },
+
+      // 完了状態（日別）
+      getDone() {
+        const raw = localStorage.getItem(this._keyDone);
+        const all = raw ? JSON.parse(raw) : {};
+        return all[today] || [];
+      },
+      toggleDone(id) {
+        const raw = localStorage.getItem(this._keyDone);
+        const all = raw ? JSON.parse(raw) : {};
+        const todayDone = all[today] || [];
+        const idx = todayDone.indexOf(id);
+        if (idx >= 0) todayDone.splice(idx, 1);
+        else todayDone.push(id);
+        all[today] = todayDone;
+        localStorage.setItem(this._keyDone, JSON.stringify(all));
+      },
+    };
+
+    let currentTiming = 'morning';
+    let editingId = null;
+
+    // タイミング切替
+    document.getElementById('timingTabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.timing-tab');
+      if (!btn) return;
+      currentTiming = btn.dataset.timing;
+      document.querySelectorAll('.timing-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      render();
+    });
+
+    // モーダル
+    const overlay = document.getElementById('modalOverlay');
+    document.getElementById('btnAddRoutine').addEventListener('click', () => {
+      editingId = null;
+      document.getElementById('modalTitle').textContent = 'ルーチンを追加';
+      document.getElementById('inputName').value = '';
+      document.getElementById('inputCategory').value = 'care';
+      document.getElementById('inputTiming').value = currentTiming;
+      document.getElementById('inputDuration').value = '';
+      document.getElementById('inputDesc').value = '';
+      // 削除ボタンを非表示
+      const btnRow = document.getElementById('btnRow');
+      btnRow.innerHTML = `
+        <button class="btn-cancel" id="btnCancel">キャンセル</button>
+        <button class="btn-save" id="btnSave">保存</button>
+      `;
+      bindModalButtons();
+      overlay.classList.add('open');
+    });
+
+    function openEdit(routine) {
+      editingId = routine.id;
+      document.getElementById('modalTitle').textContent = 'ルーチンを編集';
+      document.getElementById('inputName').value = routine.name;
+      document.getElementById('inputCategory').value = routine.category;
+      document.getElementById('inputTiming').value = routine.timing;
+      document.getElementById('inputDuration').value = routine.duration || '';
+      document.getElementById('inputDesc').value = routine.desc || '';
+      const btnRow = document.getElementById('btnRow');
+      btnRow.innerHTML = `
+        <button class="btn-delete" id="btnDelete">削除</button>
+        <button class="btn-cancel" id="btnCancel">閉じる</button>
+        <button class="btn-save" id="btnSave">保存</button>
+      `;
+      bindModalButtons();
+      overlay.classList.add('open');
+    }
+
+    function bindModalButtons() {
+      document.getElementById('btnCancel').addEventListener('click', () => overlay.classList.remove('open'));
+      document.getElementById('btnSave').addEventListener('click', saveRoutine);
+      const del = document.getElementById('btnDelete');
+      if (del) del.addEventListener('click', deleteRoutine);
+    }
+
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+    function saveRoutine() {
+      const name = document.getElementById('inputName').value.trim();
+      if (!name) return;
+
+      const data = {
+        name,
+        category: document.getElementById('inputCategory').value,
+        timing: document.getElementById('inputTiming').value,
+        duration: parseInt(document.getElementById('inputDuration').value) || 0,
+        desc: document.getElementById('inputDesc').value.trim(),
+      };
+
+      if (editingId) {
+        const list = RoutineStore.getRoutines();
+        const idx = list.findIndex(r => r.id === editingId);
+        if (idx >= 0) { list[idx] = { ...list[idx], ...data }; RoutineStore.saveRoutines(list); }
+      } else {
+        RoutineStore.addRoutine(data);
+      }
+      overlay.classList.remove('open');
+      render();
+    }
+
+    function deleteRoutine() {
+      if (editingId) {
+        RoutineStore.removeRoutine(editingId);
+        overlay.classList.remove('open');
+        render();
+      }
+    }
+
+    function render() {
+      const routines = RoutineStore.getRoutines().filter(r => r.timing === currentTiming);
+      const done = RoutineStore.getDone();
+      const container = document.getElementById('routineContainer');
+
+      // カテゴリ別にグループ化
+      const groups = {};
+      for (const r of routines) {
+        const cat = r.category || 'care';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(r);
+      }
+
+      let html = '';
+      const categoryOrder = ['strength', 'care', 'stretch', 'mobility'];
+      const categoryNames = { strength: '筋トレ', care: 'ケア', stretch: 'ストレッチ', mobility: 'モビリティ' };
+
+      for (const cat of categoryOrder) {
+        const items = groups[cat];
+        if (!items || items.length === 0) continue;
+        html += `<div class="section-title">${categoryNames[cat] || cat}</div>`;
+        html += '<div class="routine-list">';
+        for (const r of items) {
+          const isDone = done.includes(r.id);
+          const tag = CATEGORY_TAGS[r.category] || { label: r.category, cls: '' };
+          html += `
+            <div class="routine-item${isDone ? ' done' : ''}" data-id="${r.id}">
+              <button class="check-btn" data-action="toggle" data-id="${r.id}">${isDone ? '\u2713' : ''}</button>
+              <div class="info" data-action="edit" data-id="${r.id}">
+                <div class="name">${r.name}</div>
+                ${r.desc ? `<div class="desc">${r.desc}</div>` : ''}
+              </div>
+              ${r.duration ? `<div class="duration">${r.duration}分</div>` : ''}
+            </div>
+          `;
+        }
+        html += '</div>';
+      }
+
+      if (routines.length === 0) {
+        html = '<div style="text-align:center;color:var(--text-dim);padding:40px;font-size:13px">ルーチンがありません</div>';
+      }
+
+      container.innerHTML = html;
+
+      // イベント
+      container.querySelectorAll('[data-action="toggle"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          RoutineStore.toggleDone(btn.dataset.id);
+          render();
+        });
+      });
+      container.querySelectorAll('[data-action="edit"]').forEach(el => {
+        el.addEventListener('click', () => {
+          const r = RoutineStore.getRoutines().find(x => x.id === el.dataset.id);
+          if (r) openEdit(r);
+        });
+      });
+
+      // 進捗
+      const doneCount = routines.filter(r => done.includes(r.id)).length;
+      const total = routines.length;
+      document.getElementById('progressCount').textContent = `${doneCount} / ${total}`;
+      document.getElementById('progressFill').style.width = total > 0 ? `${(doneCount / total) * 100}%` : '0%';
+    }
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+
+    render();
+  </script>
+</body>
+</html>

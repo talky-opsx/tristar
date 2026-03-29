@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TriFit">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="./manifest.json">
+  <title>痛みログ - TriFit Masters</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+      --bg: #0a0a0a; --surface: #1a1a1a; --border: #2a2a2a;
+      --text: #f5f5f5; --text-dim: #888; --accent: #3b82f6;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      font-family: -apple-system, 'Hiragino Sans', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100dvh;
+      padding-top: var(--safe-top);
+      padding-bottom: calc(var(--safe-bottom) + 72px);
+      -webkit-user-select: none; user-select: none;
+    }
+    .header {
+      padding: 16px 20px 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header .date { font-size: 13px; color: var(--text-dim); }
+
+    /* 連続日数アラート */
+    .streak-alert {
+      display: none; margin: 0 20px 12px;
+      border-radius: 12px; padding: 12px 16px;
+      font-size: 13px; font-weight: 600;
+    }
+    .streak-alert.show { display: flex; align-items: center; gap: 8px; }
+    .streak-alert.warn {
+      background: rgba(234,179,8,0.1); border: 1px solid var(--yellow); color: var(--yellow);
+    }
+    .streak-alert.danger {
+      background: rgba(239,68,68,0.1); border: 1px solid var(--red); color: var(--red);
+    }
+
+    /* ボディマップ */
+    .body-map {
+      margin: 12px 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 20px;
+      position: relative;
+    }
+    .body-map h2 {
+      font-size: 14px; color: var(--text-dim); margin-bottom: 12px; text-align: center;
+    }
+    .body-map .toggle-row {
+      display: flex; justify-content: center; gap: 8px; margin-bottom: 16px;
+    }
+    .body-map .toggle-btn {
+      padding: 6px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-dim); font-size: 12px; cursor: pointer;
+    }
+    .body-map .toggle-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .body-container {
+      display: flex; justify-content: center; gap: 24px;
+    }
+    .body-side { position: relative; width: 120px; height: 320px; }
+    .body-side .label { text-align: center; font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+
+    /* SVGボディ */
+    .body-svg { width: 120px; height: 300px; }
+
+    /* 部位タップボタン（SVG上にオーバーレイ） */
+    .part-btn {
+      position: absolute; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.05);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .part-btn:active { transform: scale(0.9); }
+    .part-btn[data-level="1"] { background: rgba(234,179,8,0.4); border-color: var(--yellow); }
+    .part-btn[data-level="2"] { background: rgba(239,68,68,0.4); border-color: var(--red); }
+    .part-btn[data-level="3"] { background: rgba(239,68,68,0.7); border-color: var(--red); box-shadow: 0 0 8px var(--red); }
+    .part-btn .part-label {
+      position: absolute; white-space: nowrap;
+      font-size: 9px; color: var(--text-dim);
+      left: 50%; transform: translateX(-50%);
+      bottom: -14px;
+    }
+
+    /* 痛み入力モーダル */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      align-items: flex-end; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      width: 100%; max-width: 500px;
+      padding: 24px 20px calc(var(--safe-bottom) + 24px);
+    }
+    .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .modal .modal-sub { font-size: 13px; color: var(--text-dim); margin-bottom: 16px; }
+
+    /* 痛みレベルスライダー */
+    .level-selector { margin-bottom: 16px; }
+    .level-selector .level-label { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+    .level-options { display: flex; gap: 8px; }
+    .level-opt {
+      flex: 1; padding: 12px 8px; border-radius: 12px;
+      border: 2px solid var(--border); background: transparent;
+      color: var(--text); font-size: 13px; text-align: center; cursor: pointer;
+    }
+    .level-opt.selected { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+    .level-opt .num { font-size: 20px; font-weight: 700; display: block; margin-bottom: 2px; }
+
+    /* タイミング */
+    .timing-selector { margin-bottom: 16px; }
+    .timing-selector .level-label { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+    .timing-options { display: flex; gap: 8px; flex-wrap: wrap; }
+    .timing-opt {
+      padding: 8px 14px; border-radius: 10px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-dim); font-size: 13px; cursor: pointer;
+    }
+    .timing-opt.selected { border-color: var(--accent); color: var(--text); background: rgba(59,130,246,0.1); }
+
+    /* メモ */
+    .modal textarea {
+      width: 100%; padding: 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); font-size: 14px; resize: none; height: 60px;
+      font-family: inherit;
+    }
+    .modal .memo-label { font-size: 13px; color: var(--text-dim); margin-bottom: 4px; }
+
+    .modal .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+    .modal .btn-row button {
+      flex: 1; padding: 14px; border-radius: 12px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .btn-cancel { background: var(--border); color: var(--text); }
+    .btn-save { background: var(--text); color: var(--bg); }
+    .btn-clear { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    /* 履歴 */
+    .history { margin: 16px 20px; }
+    .history h2 { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
+    .history-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 16px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .history-item .left { display: flex; align-items: center; gap: 10px; }
+    .history-item .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .history-item .dot[data-level="1"] { background: var(--yellow); }
+    .history-item .dot[data-level="2"] { background: var(--red); }
+    .history-item .dot[data-level="3"] { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .history-item .part-name { font-size: 14px; font-weight: 600; }
+    .history-item .timing { font-size: 11px; color: var(--text-dim); }
+    .history-item .date { font-size: 12px; color: var(--text-dim); }
+
+    /* タブバー */
+    .tab-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 calc(var(--safe-bottom) + 8px);
+    }
+    .tab-bar a {
+      display: flex; flex-direction: column; align-items: center;
+      text-decoration: none; color: var(--text-dim);
+      font-size: 10px; gap: 2px; padding: 4px 12px;
+    }
+    .tab-bar a.active { color: var(--text); }
+    .tab-bar a .icon { font-size: 22px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>痛みログ</h1>
+    <span class="date" id="dateLabel"></span>
+  </div>
+
+  <!-- 連続日数アラート -->
+  <div class="streak-alert" id="streakAlert">
+    <span id="streakIcon"></span>
+    <span id="streakText"></span>
+  </div>
+
+  <!-- ボディマップ -->
+  <div class="body-map">
+    <h2>痛みのある部位をタップ</h2>
+    <div class="toggle-row">
+      <button class="toggle-btn active" data-view="front" id="btnFront">前面</button>
+      <button class="toggle-btn" data-view="back" id="btnBack">後面</button>
+    </div>
+    <div class="body-container">
+      <!-- 前面 -->
+      <div class="body-side" id="frontView">
+        <svg class="body-svg" viewBox="0 0 120 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- 頭 -->
+          <circle cx="60" cy="22" r="18" stroke="#444" stroke-width="1.5" fill="none"/>
+          <!-- 首 -->
+          <line x1="60" y1="40" x2="60" y2="50" stroke="#444" stroke-width="1.5"/>
+          <!-- 胴体 -->
+          <path d="M35 50 L85 50 L80 140 L40 140 Z" stroke="#444" stroke-width="1.5" fill="none"/>
+          <!-- 左腕 -->
+          <path d="M35 50 L15 90 L10 130" stroke="#444" stroke-width="1.5" fill="none"/>
+          <!-- 右腕 -->
+          <path d="M85 50 L105 90 L110 130" stroke="#444" stroke-width="1.5" fill="none"/>
+          <!-- 左脚 -->
+          <path d="M45 140 L40 200 L38 260 L35 290" stroke="#444" stroke-width="1.5" fill="none"/>
+          <!-- 右脚 -->
+          <path d="M75 140 L80 200 L82 260 L85 290" stroke="#444" stroke-width="1.5" fill="none"/>
+        </svg>
+        <!-- 前面タップ部位 -->
+        <button class="part-btn" data-part="left-shoulder" data-side="front" style="left:22px;top:52px;width:22px;height:22px">
+          <span class="part-label">左肩</span>
+        </button>
+        <button class="part-btn" data-part="right-shoulder" data-side="front" style="left:76px;top:52px;width:22px;height:22px">
+          <span class="part-label">右肩</span>
+        </button>
+        <button class="part-btn" data-part="chest" data-side="front" style="left:46px;top:65px;width:28px;height:24px;border-radius:6px">
+          <span class="part-label">胸</span>
+        </button>
+        <button class="part-btn" data-part="left-knee" data-side="front" style="left:28px;top:198px;width:24px;height:24px">
+          <span class="part-label">左膝</span>
+        </button>
+        <button class="part-btn" data-part="right-knee" data-side="front" style="left:68px;top:198px;width:24px;height:24px">
+          <span class="part-label">右膝</span>
+        </button>
+        <button class="part-btn" data-part="left-shin" data-side="front" style="left:26px;top:232px;width:22px;height:28px;border-radius:6px">
+          <span class="part-label">左脛</span>
+        </button>
+        <button class="part-btn" data-part="right-shin" data-side="front" style="left:70px;top:232px;width:22px;height:28px;border-radius:6px">
+          <span class="part-label">右脛</span>
+        </button>
+        <button class="part-btn" data-part="left-ankle" data-side="front" style="left:24px;top:270px;width:22px;height:22px">
+          <span class="part-label">左足首</span>
+        </button>
+        <button class="part-btn" data-part="right-ankle" data-side="front" style="left:72px;top:270px;width:22px;height:22px">
+          <span class="part-label">右足首</span>
+        </button>
+        <button class="part-btn" data-part="left-quad" data-side="front" style="left:30px;top:158px;width:24px;height:30px;border-radius:6px">
+          <span class="part-label">左腿前</span>
+        </button>
+        <button class="part-btn" data-part="right-quad" data-side="front" style="left:66px;top:158px;width:24px;height:30px;border-radius:6px">
+          <span class="part-label">右腿前</span>
+        </button>
+        <button class="part-btn" data-part="hip" data-side="front" style="left:42px;top:130px;width:36px;height:22px;border-radius:6px">
+          <span class="part-label">股関節</span>
+        </button>
+      </div>
+
+      <!-- 後面（初期非表示） -->
+      <div class="body-side" id="backView" style="display:none">
+        <svg class="body-svg" viewBox="0 0 120 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="60" cy="22" r="18" stroke="#444" stroke-width="1.5" fill="none"/>
+          <line x1="60" y1="40" x2="60" y2="50" stroke="#444" stroke-width="1.5"/>
+          <path d="M35 50 L85 50 L80 140 L40 140 Z" stroke="#444" stroke-width="1.5" fill="none"/>
+          <path d="M35 50 L15 90 L10 130" stroke="#444" stroke-width="1.5" fill="none"/>
+          <path d="M85 50 L105 90 L110 130" stroke="#444" stroke-width="1.5" fill="none"/>
+          <path d="M45 140 L40 200 L38 260 L35 290" stroke="#444" stroke-width="1.5" fill="none"/>
+          <path d="M75 140 L80 200 L82 260 L85 290" stroke="#444" stroke-width="1.5" fill="none"/>
+        </svg>
+        <button class="part-btn" data-part="neck" data-side="back" style="left:46px;top:38px;width:28px;height:18px;border-radius:6px">
+          <span class="part-label">首</span>
+        </button>
+        <button class="part-btn" data-part="upper-back" data-side="back" style="left:40px;top:62px;width:40px;height:28px;border-radius:6px">
+          <span class="part-label">背中上部</span>
+        </button>
+        <button class="part-btn" data-part="lower-back" data-side="back" style="left:42px;top:100px;width:36px;height:28px;border-radius:6px">
+          <span class="part-label">腰</span>
+        </button>
+        <button class="part-btn" data-part="left-hamstring" data-side="back" style="left:30px;top:158px;width:24px;height:30px;border-radius:6px">
+          <span class="part-label">左ハム</span>
+        </button>
+        <button class="part-btn" data-part="right-hamstring" data-side="back" style="left:66px;top:158px;width:24px;height:30px;border-radius:6px">
+          <span class="part-label">右ハム</span>
+        </button>
+        <button class="part-btn" data-part="left-calf" data-side="back" style="left:26px;top:232px;width:22px;height:28px;border-radius:6px">
+          <span class="part-label">左ふくらはぎ</span>
+        </button>
+        <button class="part-btn" data-part="right-calf" data-side="back" style="left:70px;top:232px;width:22px;height:28px;border-radius:6px">
+          <span class="part-label">右ふくらはぎ</span>
+        </button>
+        <button class="part-btn" data-part="left-achilles" data-side="back" style="left:28px;top:268px;width:18px;height:18px">
+          <span class="part-label">左アキレス</span>
+        </button>
+        <button class="part-btn" data-part="right-achilles" data-side="back" style="left:74px;top:268px;width:18px;height:18px">
+          <span class="part-label">右アキレス</span>
+        </button>
+        <button class="part-btn" data-part="left-glute" data-side="back" style="left:32px;top:132px;width:24px;height:22px;border-radius:6px">
+          <span class="part-label">左臀部</span>
+        </button>
+        <button class="part-btn" data-part="right-glute" data-side="back" style="left:64px;top:132px;width:24px;height:22px;border-radius:6px">
+          <span class="part-label">右臀部</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 今日の記録一覧 -->
+  <div class="history" id="historySection">
+    <h2>今日の記録</h2>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- 痛み入力モーダル -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h3 id="modalTitle">左膝の痛み</h3>
+      <div class="modal-sub" id="modalSub">痛みレベルとタイミングを選択</div>
+
+      <div class="level-selector">
+        <div class="level-label">痛みレベル</div>
+        <div class="level-options">
+          <button class="level-opt" data-level="1">
+            <span class="num">1</span>違和感
+          </button>
+          <button class="level-opt" data-level="2">
+            <span class="num">2</span>痛い
+          </button>
+          <button class="level-opt" data-level="3">
+            <span class="num">3</span>強い痛み
+          </button>
+        </div>
+      </div>
+
+      <div class="timing-selector">
+        <div class="level-label">タイミング</div>
+        <div class="timing-options">
+          <button class="timing-opt" data-timing="before">練習前</button>
+          <button class="timing-opt" data-timing="during">練習中</button>
+          <button class="timing-opt" data-timing="after">練習後</button>
+          <button class="timing-opt" data-timing="rest">安静時</button>
+          <button class="timing-opt" data-timing="morning">起床時</button>
+        </div>
+      </div>
+
+      <div class="memo-label">メモ（任意）</div>
+      <textarea id="painMemo" placeholder="例: 下り坂で痛みが増す"></textarea>
+
+      <div class="btn-row">
+        <button class="btn-clear" id="btnClearPain">解除</button>
+        <button class="btn-cancel" id="btnCancel">閉じる</button>
+        <button class="btn-save" id="btnSavePain">記録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- タブバー -->
+  <nav class="tab-bar">
+    <a href="./index.html">
+      <span class="icon">&#x1F3AF;</span>判定
+    </a>
+    <a href="./fit-import.html">
+      <span class="icon">&#x23F1;</span>FIT取込
+    </a>
+    <a href="./pain-log.html" class="active">
+      <span class="icon">&#x1F9B5;</span>痛みログ
+    </a>
+    <a href="./routine.html">
+      <span class="icon">&#x1F4CB;</span>ルーチン
+    </a>
+  </nav>
+
+  <script type="module">
+    import { Store } from './lib/core.js';
+
+    // 部位名マッピング
+    const PART_NAMES = {
+      'left-shoulder': '左肩', 'right-shoulder': '右肩', 'chest': '胸',
+      'left-knee': '左膝', 'right-knee': '右膝',
+      'left-shin': '左脛', 'right-shin': '右脛',
+      'left-ankle': '左足首', 'right-ankle': '右足首',
+      'left-quad': '左大腿前面', 'right-quad': '右大腿前面',
+      'hip': '股関節',
+      'neck': '首', 'upper-back': '背中上部', 'lower-back': '腰',
+      'left-hamstring': '左ハムストリング', 'right-hamstring': '右ハムストリング',
+      'left-calf': '左ふくらはぎ', 'right-calf': '右ふくらはぎ',
+      'left-achilles': '左アキレス腱', 'right-achilles': '右アキレス腱',
+      'left-glute': '左臀部', 'right-glute': '右臀部',
+    };
+    const TIMING_NAMES = {
+      before: '練習前', during: '練習中', after: '練習後', rest: '安静時', morning: '起床時',
+    };
+
+    // 日付
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const dow = ['日','月','火','水','木','金','土'][now.getDay()];
+    document.getElementById('dateLabel').textContent = `${now.getMonth()+1}/${now.getDate()}（${dow}）`;
+
+    // 痛みログStore拡張
+    const PainStore = {
+      _key: 'trifit_pain_logs',
+      getAll() {
+        const raw = localStorage.getItem(this._key);
+        return raw ? JSON.parse(raw) : [];
+      },
+      save(logs) {
+        localStorage.setItem(this._key, JSON.stringify(logs));
+      },
+      addEntry(entry) {
+        const logs = this.getAll();
+        // 同日・同部位は上書き
+        const idx = logs.findIndex(l => l.date === entry.date && l.part === entry.part);
+        if (idx >= 0) logs[idx] = entry;
+        else logs.push(entry);
+        this.save(logs);
+      },
+      removeEntry(date, part) {
+        const logs = this.getAll().filter(l => !(l.date === date && l.part === part));
+        this.save(logs);
+      },
+      getToday() {
+        return this.getAll().filter(l => l.date === today);
+      },
+      // 同部位の連続日数を計算
+      getStreak(part) {
+        const logs = this.getAll().filter(l => l.part === part).sort((a,b) => b.date.localeCompare(a.date));
+        if (logs.length === 0) return 0;
+        let streak = 0;
+        let checkDate = new Date(today);
+        for (let i = 0; i < 30; i++) {
+          const dateStr = checkDate.toISOString().slice(0, 10);
+          if (logs.find(l => l.date === dateStr)) {
+            streak++;
+          } else if (i > 0) {
+            break;
+          }
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+        return streak;
+      },
+      // 全部位の最大連続日数
+      getMaxStreak() {
+        const parts = [...new Set(this.getAll().map(l => l.part))];
+        let max = { part: null, days: 0 };
+        for (const p of parts) {
+          const d = this.getStreak(p);
+          if (d > max.days) max = { part: p, days: d };
+        }
+        return max;
+      },
+    };
+
+    // 前面/後面切替
+    document.getElementById('btnFront').addEventListener('click', () => {
+      document.getElementById('frontView').style.display = '';
+      document.getElementById('backView').style.display = 'none';
+      document.getElementById('btnFront').classList.add('active');
+      document.getElementById('btnBack').classList.remove('active');
+    });
+    document.getElementById('btnBack').addEventListener('click', () => {
+      document.getElementById('frontView').style.display = 'none';
+      document.getElementById('backView').style.display = '';
+      document.getElementById('btnBack').classList.add('active');
+      document.getElementById('btnFront').classList.remove('active');
+    });
+
+    // モーダル制御
+    const overlay = document.getElementById('modalOverlay');
+    let currentPart = null;
+    let selectedLevel = null;
+    let selectedTiming = null;
+
+    document.querySelectorAll('.part-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentPart = btn.dataset.part;
+        document.getElementById('modalTitle').textContent = `${PART_NAMES[currentPart] || currentPart}の痛み`;
+
+        // 既存データがあればプリセット
+        const existing = PainStore.getToday().find(l => l.part === currentPart);
+        selectedLevel = existing ? existing.level : null;
+        selectedTiming = existing ? existing.timing : null;
+        document.getElementById('painMemo').value = existing ? (existing.memo || '') : '';
+
+        // UIリセット
+        document.querySelectorAll('.level-opt').forEach(o => {
+          o.classList.toggle('selected', o.dataset.level == selectedLevel);
+        });
+        document.querySelectorAll('.timing-opt').forEach(o => {
+          o.classList.toggle('selected', o.dataset.timing === selectedTiming);
+        });
+
+        overlay.classList.add('open');
+      });
+    });
+
+    // レベル選択
+    document.querySelectorAll('.level-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedLevel = parseInt(btn.dataset.level);
+        document.querySelectorAll('.level-opt').forEach(o => o.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+
+    // タイミング選択
+    document.querySelectorAll('.timing-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedTiming = btn.dataset.timing;
+        document.querySelectorAll('.timing-opt').forEach(o => o.classList.remove('selected'));
+        btn.classList.add('selected');
+      });
+    });
+
+    // 閉じる
+    document.getElementById('btnCancel').addEventListener('click', () => overlay.classList.remove('open'));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('open'); });
+
+    // 保存
+    document.getElementById('btnSavePain').addEventListener('click', () => {
+      if (!selectedLevel || !selectedTiming) return;
+      PainStore.addEntry({
+        date: today,
+        part: currentPart,
+        level: selectedLevel,
+        timing: selectedTiming,
+        memo: document.getElementById('painMemo').value,
+        ts: Date.now(),
+      });
+      overlay.classList.remove('open');
+      render();
+    });
+
+    // 解除
+    document.getElementById('btnClearPain').addEventListener('click', () => {
+      if (!currentPart) return;
+      PainStore.removeEntry(today, currentPart);
+      overlay.classList.remove('open');
+      render();
+    });
+
+    function render() {
+      const todayLogs = PainStore.getToday();
+
+      // ボディマップ上の部位ボタンにレベルを反映
+      document.querySelectorAll('.part-btn').forEach(btn => {
+        const log = todayLogs.find(l => l.part === btn.dataset.part);
+        btn.dataset.level = log ? log.level : '';
+      });
+
+      // 履歴一覧
+      const list = document.getElementById('historyList');
+      if (todayLogs.length === 0) {
+        list.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;font-size:13px">記録なし</div>';
+      } else {
+        list.innerHTML = todayLogs.map(l => `
+          <div class="history-item">
+            <div class="left">
+              <div class="dot" data-level="${l.level}"></div>
+              <div>
+                <div class="part-name">${PART_NAMES[l.part] || l.part} Lv.${l.level}</div>
+                <div class="timing">${TIMING_NAMES[l.timing] || l.timing}${l.memo ? ' / ' + l.memo : ''}</div>
+              </div>
+            </div>
+            <div class="date">${new Date(l.ts).toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        `).join('');
+      }
+
+      // 連続日数アラート
+      const streak = PainStore.getMaxStreak();
+      const alertEl = document.getElementById('streakAlert');
+      if (streak.days >= 5) {
+        alertEl.className = 'streak-alert show danger';
+        document.getElementById('streakIcon').textContent = '\u{1F6A8}';
+        document.getElementById('streakText').textContent =
+          `${PART_NAMES[streak.part]}が${streak.days}日連続 - 医療機関の受診を推奨`;
+        alertEl.style.display = '';
+      } else if (streak.days >= 3) {
+        alertEl.className = 'streak-alert show warn';
+        document.getElementById('streakIcon').textContent = '\u{26A0}\u{FE0F}';
+        document.getElementById('streakText').textContent =
+          `${PART_NAMES[streak.part]}が${streak.days}日連続 - 練習強度を下げてください`;
+        alertEl.style.display = '';
+      } else {
+        alertEl.classList.remove('show');
+      }
+    }
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+
+    render();
+  </script>
+</body>
+</html>
